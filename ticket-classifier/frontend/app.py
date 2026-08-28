@@ -8,13 +8,27 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 st.set_page_config(
-    page_title="Ticket Classifier — PKCERT",
+    page_title="Ticket Classifier",
     page_icon="🎫",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Global Styles ─────────────────────────────────────────────────────────────
+GITHUB_URL = "https://github.com/Abdul1652005"
+AUTHOR     = "Abdul Rehman"
+
+# ── Session State Init ────────────────────────────────────────────────────────
+if "history"          not in st.session_state: st.session_state.history          = []
+if "total_classified" not in st.session_state: st.session_state.total_classified = 0
+if "ticket_text"      not in st.session_state: st.session_state.ticket_text      = ""
+if "fill_example"     not in st.session_state: st.session_state.fill_example     = None
+
+# Apply queued example
+if st.session_state.fill_example:
+    st.session_state.ticket_text  = st.session_state.fill_example
+    st.session_state.fill_example = None
+
+# ── Global Dark Theme CSS ─────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -23,17 +37,15 @@ st.markdown("""
 
 .stApp { background: linear-gradient(135deg, #0a0e1a 0%, #0d1117 60%, #0e1520 100%); }
 
-/* ── Sidebar ── */
 [data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.03);
-    border-right: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255, 255, 255, 0.03);
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
     backdrop-filter: blur(10px);
 }
 
-/* ── Hero Header ── */
 .hero-header {
-    background: linear-gradient(135deg, rgba(52,211,153,0.12) 0%, rgba(59,130,246,0.08) 100%);
-    border: 1px solid rgba(52,211,153,0.2);
+    background: linear-gradient(135deg, rgba(52, 211, 153, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%);
+    border: 1px solid rgba(52, 211, 153, 0.2);
     border-radius: 16px;
     padding: 2rem 2.5rem;
     margin-bottom: 1.5rem;
@@ -44,7 +56,7 @@ st.markdown("""
     content: "";
     position: absolute; top: -40px; right: -40px;
     width: 180px; height: 180px;
-    background: radial-gradient(circle, rgba(52,211,153,0.15) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(52, 211, 153, 0.15) 0%, transparent 70%);
     border-radius: 50%;
 }
 .hero-title {
@@ -53,22 +65,20 @@ st.markdown("""
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     margin: 0;
 }
-.hero-sub { color: #6b7280; font-size: 0.95rem; margin-top: 0.3rem; }
+.hero-sub { color: #9ca3af; font-size: 0.95rem; margin-top: 0.3rem; }
 
-/* ── Glass Card ── */
 .glass-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
     padding: 1.5rem;
     margin-bottom: 1rem;
     backdrop-filter: blur(6px);
 }
 
-/* ── Result Card ── */
 .result-card {
-    background: linear-gradient(135deg, rgba(52,211,153,0.1) 0%, rgba(16,185,129,0.06) 100%);
-    border: 1px solid rgba(52,211,153,0.3);
+    background: linear-gradient(135deg, rgba(52, 211, 153, 0.1) 0%, rgba(16, 185, 129, 0.06) 100%);
+    border: 1px solid rgba(52, 211, 153, 0.3);
     border-left: 4px solid #34d399;
     border-radius: 12px;
     padding: 1.4rem 1.8rem;
@@ -79,47 +89,31 @@ st.markdown("""
     from { opacity: 0; transform: translateY(-10px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.result-label { color: #6b7280; font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.3rem; }
+.result-label { color: #9ca3af; font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.3rem; }
 .result-value { color: #34d399; font-size: 1.9rem; font-weight: 700; }
-.result-confidence { color: #9ca3af; font-size: 0.85rem; margin-top: 0.5rem; }
+.result-confidence { color: #d1d5db; font-size: 0.85rem; margin-top: 0.5rem; }
 
-/* ── Metric Card ── */
 .metric-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     padding: 1rem 1.2rem;
     text-align: center;
 }
 .metric-number { font-size: 1.8rem; font-weight: 700; color: #34d399; }
-.metric-label  { font-size: 0.78rem; color: #6b7280; letter-spacing: 1px; text-transform: uppercase; }
+.metric-label  { font-size: 0.78rem; color: #9ca3af; letter-spacing: 1px; text-transform: uppercase; }
 
-/* ── Example Chips ── */
-.chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 1rem; }
-.chip {
-    background: rgba(31,41,55,0.8);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #d1d5db;
-    padding: 0.3rem 0.9rem;
-    border-radius: 20px;
-    font-size: 0.82rem;
-    cursor: pointer;
-    transition: all 0.2s;
+.sb-badge {
+    display: inline-block;
+    background: rgba(52, 211, 153, 0.15);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    color: #34d399;
+    border-radius: 8px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.78rem;
+    margin: 0.15rem 0.1rem;
 }
-.chip:hover { background: rgba(52,211,153,0.2); border-color: #34d399; color: #34d399; }
 
-/* ── History Row ── */
-.history-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 0.7rem 1rem;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    font-size: 0.88rem;
-}
-.history-row:last-child { border-bottom: none; }
-.history-cat { color: #34d399; font-weight: 600; }
-.history-time { color: #4b5563; font-size: 0.75rem; }
-
-/* ── Category Badge ── */
 .cat-badge {
     display: inline-block;
     padding: 0.25rem 0.7rem;
@@ -129,49 +123,63 @@ st.markdown("""
     margin: 0.15rem;
 }
 
-/* ── Section Header ── */
 .section-header {
-    color: #9ca3af; font-size: 0.72rem;
-    letter-spacing: 2px; text-transform: uppercase;
-    margin-bottom: 0.8rem; font-weight: 600;
+    color: #9ca3af;
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+    font-weight: 600;
 }
 
-/* ── Sidebar badge ── */
-.sb-badge {
-    display: inline-block;
-    background: rgba(52,211,153,0.15);
-    border: 1px solid rgba(52,211,153,0.3);
-    color: #34d399;
-    border-radius: 8px;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.78rem;
-    margin: 0.15rem 0.1rem;
-}
-
-/* ── Footer ── */
 .footer {
     text-align: center;
-    color: #374151;
-    font-size: 0.78rem;
+    color: #6b7280;
+    font-size: 0.82rem;
     margin-top: 2rem;
     padding: 1rem 0;
-    border-top: 1px solid rgba(255,255,255,0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
+.footer a { color: #34d399; text-decoration: none; font-weight: 600; }
+.footer a:hover { text-decoration: underline; }
 
-/* Hide default Streamlit menu button */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+}
+.empty-icon  { font-size: 3rem; }
+.empty-label { color: #9ca3af; margin-top: 0.8rem; font-size: 0.9rem; }
+
+table.info-table { width: 100%; border-collapse: collapse; color: #d1d5db; font-size: 0.88rem; }
+table.info-table td { padding: 0.4rem 0; }
+table.info-table td:first-child { color: #9ca3af; width: 40%; }
+
 #MainMenu { visibility: hidden; }
 footer    { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── Category Color Palette ─────────────────────────────────────────────────────
+# ── Load Model ────────────────────────────────────────────────────────────────
 CATEGORY_COLORS = [
     ("#34d399", "#132a23"), ("#60a5fa", "#0f1f35"), ("#f472b6", "#2a0f1e"),
     ("#a78bfa", "#1a0f35"), ("#fb923c", "#2a1505"), ("#facc15", "#2a2005"),
     ("#38bdf8", "#0a1f2a"), ("#f87171", "#2a0f0f"), ("#4ade80", "#0f2a12"),
     ("#e879f9", "#250f2a"),
 ]
+
+@st.cache_resource
+def load_model():
+    m = joblib.load(os.path.join(BASE_DIR, "ticket_model.joblib"))
+    v = joblib.load(os.path.join(BASE_DIR, "ticket_vectorizer.joblib"))
+    return m, v
+
+model, vectorizer = load_model()
+categories = list(model.classes_)
+cat_color_map = {cat: CATEGORY_COLORS[i % len(CATEGORY_COLORS)] for i, cat in enumerate(categories)}
 
 EXAMPLES = [
     "My laptop screen is black and won't turn on",
@@ -183,35 +191,6 @@ EXAMPLES = [
 ]
 
 
-# ── Load Model ────────────────────────────────────────────────────────────────
-@st.cache_resource
-def load_model():
-    m = joblib.load(os.path.join(BASE_DIR, "ticket_model.joblib"))
-    v = joblib.load(os.path.join(BASE_DIR, "ticket_vectorizer.joblib"))
-    return m, v
-
-
-model, vectorizer = load_model()
-categories = list(model.classes_)
-cat_color_map = {cat: CATEGORY_COLORS[i % len(CATEGORY_COLORS)] for i, cat in enumerate(categories)}
-
-
-# ── Session State Init ────────────────────────────────────────────────────────
-if "history" not in st.session_state:
-    st.session_state.history = []
-if "total_classified" not in st.session_state:
-    st.session_state.total_classified = 0
-if "ticket_text" not in st.session_state:
-    st.session_state.ticket_text = ""
-if "fill_example" not in st.session_state:
-    st.session_state.fill_example = None
-
-# ── Apply example if one was clicked ─────────────────────────────────────────
-if st.session_state.fill_example:
-    st.session_state.ticket_text = st.session_state.fill_example
-    st.session_state.fill_example = None
-
-
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  SIDEBAR                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════╝
@@ -220,7 +199,9 @@ with st.sidebar:
     st.markdown("""
     <div class="glass-card">
         <div class="section-header">Architecture</div>
-        <p style="color:#d1d5db;font-size:0.9rem;margin:0">TF-IDF Vectorizer<br>+ Linear SVM (LinearSVC)</p>
+        <p style="color:#d1d5db;font-size:0.9rem;margin:0">
+            TF-IDF Vectorizer<br>+ Linear SVM (LinearSVC)
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -234,7 +215,7 @@ with st.sidebar:
     st.markdown("""
     <div class="glass-card">
         <div class="section-header">Pipeline</div>
-        <p style="color:#6b7280;font-size:0.82rem;line-height:1.8;margin:0">
+        <p style="color:#9ca3af;font-size:0.82rem;line-height:1.8;margin:0">
             📓 Jupyter Notebook<br>
             ↓ Data cleaning + TF-IDF<br>
             ↓ LinearSVC training<br>
@@ -244,7 +225,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # Session stats
+    # Session Stats
     st.markdown("---")
     st.markdown("### 📊 Session Stats")
     col_a, col_b = st.columns(2)
@@ -261,7 +242,7 @@ with st.sidebar:
             <div class="metric-label">Categories</div>
         </div>""", unsafe_allow_html=True)
 
-    # Export history
+    # Export / Clear
     if st.session_state.history:
         st.markdown("---")
         df_export = pd.DataFrame(st.session_state.history)
@@ -274,12 +255,17 @@ with st.sidebar:
             use_container_width=True,
         )
         if st.button("🗑️ Clear History", use_container_width=True):
-            st.session_state.history = []
+            st.session_state.history          = []
             st.session_state.total_classified = 0
             st.rerun()
 
     st.markdown("---")
-    st.markdown('<p style="color:#374151;font-size:0.75rem;text-align:center">Task 29 · PKCERT Internship</p>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p style="color:#6b7280;font-size:0.75rem;text-align:center">'
+        f'<a href="{GITHUB_URL}" target="_blank" style="color:#34d399;text-decoration:none">github.com/Abdul1652005</a>'
+        f'</p>',
+        unsafe_allow_html=True,
+    )
 
 
 # ╔══════════════════════════════════════════════════════════════════════╗
@@ -288,7 +274,7 @@ with st.sidebar:
 st.markdown("""
 <div class="hero-header">
     <div class="hero-title">🎫 Support Ticket Classifier</div>
-    <div class="hero-sub">AI-powered ticket triage · TF-IDF + LinearSVC · Task 29 Capstone</div>
+    <div class="hero-sub">AI-powered ticket triage &nbsp;·&nbsp; TF-IDF + LinearSVC</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -309,11 +295,8 @@ with tab1:
             placeholder="Describe the support issue in detail…",
             key="ticket_text",
         )
+        st.caption(f"{len(text)} characters")
 
-        char_count = len(text)
-        st.caption(f"{char_count} characters")
-
-        # Example chips
         st.markdown('<div class="section-header" style="margin-top:0.8rem">Quick Examples</div>', unsafe_allow_html=True)
         ex_cols = st.columns(3)
         for i, ex in enumerate(EXAMPLES):
@@ -330,53 +313,50 @@ with tab1:
                 st.warning("⚠️ Please enter a ticket description.")
             else:
                 with st.spinner("Analysing…"):
-                    vec = vectorizer.transform([text.strip().lower()])
+                    vec        = vectorizer.transform([text.strip().lower()])
                     prediction = model.predict(vec)[0]
-                    scores = model.decision_function(vec)[0]
+                    scores     = model.decision_function(vec)[0]
+                    exp_s      = np.exp(scores - np.max(scores))
+                    probs      = exp_s / exp_s.sum()
+                    conf_pct   = float(probs.max()) * 100
 
-                    # Softmax-style relative confidence
-                    exp_s = np.exp(scores - np.max(scores))
-                    probs = exp_s / exp_s.sum()
-                    confidence_pct = float(probs.max()) * 100
-
-                    # Update history + counter
                     st.session_state.total_classified += 1
                     st.session_state.history.insert(0, {
-                        "Ticket": text.strip()[:60] + ("…" if len(text.strip()) > 60 else ""),
-                        "Category": prediction,
-                        "Confidence": f"{confidence_pct:.1f}%",
-                        "Time": datetime.now().strftime("%H:%M:%S"),
+                        "Ticket":     text.strip()[:60] + ("…" if len(text.strip()) > 60 else ""),
+                        "Category":   prediction,
+                        "Confidence": f"{conf_pct:.1f}%",
+                        "Time":       datetime.now().strftime("%H:%M:%S"),
                     })
 
-                pred_color = cat_color_map.get(prediction, ("#34d399", "#132a23"))[0]
-                pred_bg    = cat_color_map.get(prediction, ("#34d399", "#132a23"))[1]
-
+                fg, bg = cat_color_map.get(prediction, ("#34d399", "#132a23"))
                 st.markdown(f"""
-                <div class="result-card" style="border-left-color:{pred_color}; background:linear-gradient(135deg,{pred_bg}CC 0%,rgba(13,17,23,0.9) 100%);">
+                <div class="result-card" style="
+                    background: linear-gradient(135deg, {bg}CC 0%, rgba(13, 17, 23, 0.9) 100%);
+                    border: 1px solid {fg}55;
+                    border-left: 4px solid {fg};">
                     <div class="result-label">Predicted Category</div>
-                    <div class="result-value" style="color:{pred_color}">{prediction}</div>
-                    <div class="result-confidence">Relative confidence: <b>{confidence_pct:.1f}%</b></div>
+                    <div class="result-value" style="color:{fg}">{prediction}</div>
+                    <div class="result-confidence">Relative confidence: <b>{conf_pct:.1f}%</b></div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.progress(confidence_pct / 100)
+                st.progress(conf_pct / 100)
 
-                # Top-N confidence chart
-                st.markdown('<div class="section-header" style="margin-top:1.2rem">Score Distribution</div>', unsafe_allow_html=True)
-                top_n = min(5, len(categories))
+                st.markdown('<div class="section-header" style="margin-top:1.2rem">Score Distribution (Top 5)</div>', unsafe_allow_html=True)
+                top_n   = min(5, len(categories))
                 top_idx = np.argsort(probs)[::-1][:top_n]
                 chart_df = pd.DataFrame({
-                    "Category": [categories[i] for i in top_idx],
-                    "Confidence (%)": [round(probs[i] * 100, 2) for i in top_idx],
+                    "Category":        [categories[i] for i in top_idx],
+                    "Confidence (%)":  [round(probs[i] * 100, 2) for i in top_idx],
                 })
                 st.bar_chart(chart_df.set_index("Category"), color="#34d399", use_container_width=True)
 
         else:
             st.markdown("""
-            <div class="glass-card" style="text-align:center;padding:3rem 1.5rem;">
-                <div style="font-size:3rem">🎫</div>
-                <div style="color:#4b5563;margin-top:0.8rem;font-size:0.9rem">
-                    Enter a ticket and click <b style="color:#34d399">Classify Ticket</b><br>to see predictions here
+            <div class="empty-state">
+                <div class="empty-icon">🎫</div>
+                <div class="empty-label">
+                    Enter a ticket and click <b style="color:#34d399">Classify Ticket</b><br>to see predictions here.
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -386,9 +366,9 @@ with tab1:
 with tab2:
     if not st.session_state.history:
         st.markdown("""
-        <div class="glass-card" style="text-align:center;padding:3rem;">
-            <div style="font-size:2.5rem">📋</div>
-            <div style="color:#4b5563;margin-top:0.8rem">No classifications yet this session.</div>
+        <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <div class="empty-label">No classifications yet this session.</div>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -405,8 +385,6 @@ with tab2:
                 "Time":       st.column_config.TextColumn("Time",           width="small"),
             },
         )
-
-        # Category distribution bar
         st.markdown('<div class="section-header" style="margin-top:1.5rem">Category Distribution This Session</div>', unsafe_allow_html=True)
         cat_counts = df_hist["Category"].value_counts().reset_index()
         cat_counts.columns = ["Category", "Count"]
@@ -422,9 +400,8 @@ with tab3:
         <div class="glass-card">
             <div class="section-header">Project</div>
             <p style="color:#d1d5db;line-height:1.8;margin:0">
-                Customer Support Ticket Classifier built as the <b style="color:#34d399">Task 29 Final Capstone</b>
-                of the <b>PKCERT AI & Software Development Internship</b>.<br><br>
-                Automatically categorizes free-text support tickets using a trained machine learning model,
+                Customer Support Ticket Classifier that automatically categorizes
+                free-text support tickets using a trained machine learning model,
                 reducing manual triage time and improving response routing.
             </p>
         </div>
@@ -433,12 +410,12 @@ with tab3:
         st.markdown("""
         <div class="glass-card">
             <div class="section-header">Tech Stack</div>
-            <table style="color:#d1d5db;font-size:0.88rem;width:100%;border-collapse:collapse">
-                <tr><td style="padding:0.4rem 0;color:#6b7280;width:40%">Model</td><td>TF-IDF + LinearSVC</td></tr>
-                <tr><td style="padding:0.4rem 0;color:#6b7280">Backend</td><td>FastAPI + Uvicorn</td></tr>
-                <tr><td style="padding:0.4rem 0;color:#6b7280">Frontend</td><td>Streamlit</td></tr>
-                <tr><td style="padding:0.4rem 0;color:#6b7280">Training</td><td>Jupyter Notebook</td></tr>
-                <tr><td style="padding:0.4rem 0;color:#6b7280">Serialization</td><td>joblib</td></tr>
+            <table class="info-table">
+                <tr><td>Model</td><td style="color:#d1d5db">TF-IDF + LinearSVC</td></tr>
+                <tr><td>Backend</td><td style="color:#d1d5db">FastAPI + Uvicorn</td></tr>
+                <tr><td>Frontend</td><td style="color:#d1d5db">Streamlit</td></tr>
+                <tr><td>Training</td><td style="color:#d1d5db">Jupyter Notebook</td></tr>
+                <tr><td>Serialization</td><td style="color:#d1d5db">joblib</td></tr>
             </table>
         </div>
         """, unsafe_allow_html=True)
@@ -448,7 +425,7 @@ with tab3:
         <div class="glass-card">
             <div class="section-header">Supported Categories</div>
             {''.join(
-                f'<span class="cat-badge" style="background:{cat_color_map[c][1]};color:{cat_color_map[c][0]};border:1px solid {cat_color_map[c][0]}40">{c}</span>'
+                f'<span class="cat-badge" style="background:{cat_color_map[c][1]};color:{cat_color_map[c][0]};border:1px solid {cat_color_map[c][0]}50">{c}</span>'
                 for c in categories
             )}
         </div>
@@ -457,7 +434,7 @@ with tab3:
         st.markdown("""
         <div class="glass-card">
             <div class="section-header">How It Works</div>
-            <p style="color:#6b7280;font-size:0.85rem;line-height:2;margin:0">
+            <p style="color:#9ca3af;font-size:0.85rem;line-height:2;margin:0">
                 1️⃣ &nbsp;Text is lowercased & cleaned<br>
                 2️⃣ &nbsp;TF-IDF converts text → feature vector<br>
                 3️⃣ &nbsp;LinearSVC produces decision scores<br>
@@ -467,11 +444,25 @@ with tab3:
         </div>
         """, unsafe_allow_html=True)
 
+        st.markdown(f"""
+        <div class="glass-card">
+            <div class="section-header">Author</div>
+            <p style="color:#d1d5db;font-size:0.9rem;margin:0">
+                <b>{AUTHOR}</b><br>
+                <a href="{GITHUB_URL}" target="_blank"
+                   style="color:#34d399;text-decoration:none;font-size:0.85rem">
+                    🐙 github.com/Abdul1652005
+                </a>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # ── Footer ────────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(f"""
 <div class="footer">
-    Built by <b style="color:#34d399">Abdul Rehman</b> &nbsp;·&nbsp;
-    PKCERT AI & Software Development Internship &nbsp;·&nbsp; Task 29
+    Built by <b style="color:#34d399">{AUTHOR}</b>
+    &nbsp;·&nbsp;
+    <a href="{GITHUB_URL}" target="_blank">github.com/Abdul1652005</a>
 </div>
 """, unsafe_allow_html=True)
