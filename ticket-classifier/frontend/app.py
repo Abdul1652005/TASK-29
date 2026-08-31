@@ -332,7 +332,8 @@ with tab1:
                         prediction = result["category"]
                         confidence_pct = result["confidence"]
                         distribution = result["distribution"]
-                    except Exception:
+                    except Exception as e:
+                        st.warning(f"API call failed, using local model. Error: {e}")
                         prediction, confidence_pct, distribution = predict_local(text)
 
                 st.session_state.total_classified += 1
